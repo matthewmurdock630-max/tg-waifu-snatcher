@@ -1,4 +1,5 @@
-import os, random, requests, asyncio, logging
+ import os, random, requests, asyncio, logging
+from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from aiohttp import web
@@ -67,7 +68,14 @@ async def nsfw_cmd(u, c):
     btns = [[InlineKeyboardButton(f"🔞 {x}", callback_data=f"nsfw_{x}")] for x in NSFW_CATS]
     btns.append([InlineKeyboardButton("« Back", callback_data="home")])
     await u.message.reply_text("🔞 NSFW Categories:", reply_markup=InlineKeyboardMarkup(btns))
-btns.append([InlineKeyboardButton("« Back", callback_data="home")])
+
+async def button(u, c):
+    q = u.callback_query; await q.answer(); d = q.data
+    if d == "home":
+        await q.edit_message_text("🌸 Waifu Grabber", reply_markup=kb_home())
+    elif d == "nsfw_menu":
+        btns = [[InlineKeyboardButton(f"🔞 {x}", callback_data=f"nsfw_{x}")] for x in NSFW_CATS]
+        btns.append([InlineKeyboardButton("« Back", callback_data="home")])
         await q.edit_message_text("🔞 NSFW:", reply_markup=InlineKeyboardMarkup(btns))
     elif d.startswith("nsfw_"):
         cat = d.split("_")[1]
@@ -77,9 +85,19 @@ btns.append([InlineKeyboardButton("« Back", callback_data="home")])
     else:
         await send_img(q, c, d, False)
 
-async def health(req): return web.Response(text="ok")
+# Health server (separate thread, no async conflict)
+def run_health():
+    async def health(req): return web.Response(text="ok")
+    app = web.Application()
+    app.router.add_get("/", health)
+    web.run_app(app, host="0.0.0.0", port=PORT)
 
-async def main():
+def main():
+    # Start health server in background
+    Thread(target=run_health, daemon=True).start()
+    log.info(f"Health server on port {PORT}")
+
+    # Start bot
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
@@ -88,21 +106,8 @@ async def main():
                      ("nsfw",nsfw_cmd)]:
         app.add_handler(CommandHandler(cmd, fn))
     app.add_handler(CallbackQueryHandler(button))
+    log.info("Bot started!")
+    app.run_polling()
 
-    runner = web.AppRunner(web.Application([web.get("/", health)]))
-    await runner.setup()
-    await web.TCPSite(runner, "0.0.0.0", PORT).start()
-
-    await app.initialize(); await app.start()
-    log.info(f"Bot running on port {PORT}")
-    await asyncio.Event().wait()
-
-if name == "main":
-    asyncio.run(main())
-
-async def button(u, c):
-    q = u.callback_query; await q.answer(); d = q.data
-    if d == "home":
-        await q.edit_message_text("🌸 Waifu Grabber", reply_markup=kb_home())
-    elif d == "nsfw_menu":
-        btns = [[InlineKeyboardButton(f"🔞 {x}", callback_data=f"nsfw_{x}")] for x in NSFW_CATS]
+if __name__ == "__main__":
+    main()
