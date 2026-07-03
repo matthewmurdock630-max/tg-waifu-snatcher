@@ -2,11 +2,8 @@ services:
   - type: web
     name: waifu-bot
     runtime: python
-    rootDir: .
-    buildCommand: |
-      python -m pip install --upgrade pip
-      pip install -r requirements.txt
-    startCommand: python -m bot
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: python3 -m bot
     plan: free
     envVars:
       - key: BOT_TOKEN
